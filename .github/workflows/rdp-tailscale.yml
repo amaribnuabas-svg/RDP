@@ -1,0 +1,42 @@
+name: Setup Windows RDP via Tailscale
+
+on: 
+  workflow_dispatch: # Mengizinkan Anda menjalankan script ini secara manual dari tab 'Actions'
+
+jobs:
+  build:
+    runs-on: windows-latest # Menggunakan runner Windows terbaru
+    steps:
+      - name: Menghubungkan ke Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          
+      - name: Membuat User dan Mengaktifkan RDP
+        run: |
+          # Menambahkan user baru sesuai permintaan Anda
+          net user Adysetia Ady@123 /add
+          
+          # Memasukkan user ke grup Administrator
+          net localgroup administrators Adysetia /add
+          
+          # Mengaktifkan RDP di Registry
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+          
+          # Mengizinkan RDP melewati Firewall
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          # Menampilkan IP Tailscale agar Anda tahu ke mana harus melakukan koneksi RDP
+          Write-Host "Tailscale IP:"
+          tailscale ip -4
+        shell: powershell
+
+      - name: Menjaga RDP Tetap Aktif
+        run: |
+          Write-Host "RDP Server is running. You can connect now."
+          Write-Host "Username: Adysetia"
+          Write-Host "Password: Ady@123"
+          # Loop agar workflow tidak langsung berhenti (maksimal GitHub Actions adalah 6 jam)
+          Start-Sleep -Seconds 21600
+        shell: powershell
+        
