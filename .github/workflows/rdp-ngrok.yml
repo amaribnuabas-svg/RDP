@@ -1,0 +1,54 @@
+name: Setup Windows RDP via Ngrok
+
+on: 
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Membuat User dan Mengaktifkan RDP
+        run: |
+          Write-Host "Menambahkan User..."
+          net user Adysetia Ady@123 /add
+          net localgroup administrators Adysetia /add
+          
+          Write-Host "Mengaktifkan RDP..."
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        shell: powershell
+
+      - name: Install dan Jalankan Ngrok
+        run: |
+          Write-Host "Mengunduh Ngrok..."
+          Invoke-WebRequest -Uri 'https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip' -OutFile 'ngrok.zip'
+          Expand-Archive -Path ngrok.zip -DestinationPath .
+          
+          Write-Host "Autentikasi Ngrok..."
+          .\ngrok.exe config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+          
+          Write-Host "Menjalankan Ngrok untuk Port 3389 (RDP)..."
+          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389" -NoNewWindow
+          
+          # Tunggu beberapa detik agar Ngrok berhasil terhubung ke servernya
+          Start-Sleep -Seconds 5
+          
+          # Mengambil URL Publik dari API lokal Ngrok
+          $response = Invoke-RestMethod -Uri http://localhost:4040/api/tunnels
+          $public_url = $response.tunnels[0].public_url
+          
+          Write-Host "========================================"
+          Write-Host "Koneksi RDP via Ngrok berhasil dibuat!"
+          Write-Host "Alamat Ngrok Anda: $public_url"
+          Write-Host "========================================"
+        shell: powershell
+
+      - name: Menjaga RDP Tetap Aktif
+        run: |
+          Write-Host "Silakan cek log di tab 'Install dan Jalankan Ngrok' untuk melihat alamat koneksinya."
+          Write-Host "Username: Adysetia"
+          Write-Host "Password: Ady@123"
+          # Menahan agar workflow tidak langsung selesai
+          Start-Sleep -Seconds 21600
+        shell: powershell
+        
