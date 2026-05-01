@@ -9,31 +9,28 @@ jobs:
     steps:
       - name: Membuat User dan Mengaktifkan RDP
         run: |
-          Write-Host "Menambahkan User..."
           net user Adysetia Ady@123 /add
           net localgroup administrators Adysetia /add
-          
-          Write-Host "Mengaktifkan RDP..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         shell: powershell
 
       - name: Menjalankan Pinggy Tunnel
+        shell: bash
         run: |
-          Write-Host "Membuka jalur tunnel menggunakan Pinggy..."
-          # Menjalankan SSH di background untuk tunneling
-          Start-Process -FilePath "ssh" -ArgumentList "-p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 tcp@a.pinggy.io" -NoNewWindow -RedirectStandardOutput "pinggy_out.txt" -RedirectStandardError "pinggy_err.txt"
+          echo "Membuka jalur tunnel menggunakan Pinggy..."
           
-          # Tunggu sebentar agar server merespons
-          Start-Sleep -Seconds 15
+          # Menjalankan SSH di background menggunakan Bash agar output terbaca
+          ssh -p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 tcp@a.pinggy.io > pinggy.log 2>&1 &
           
-          Write-Host "========================================"
-          Write-Host "LOG KONEKSI:"
-          Get-Content pinggy_out.txt -ErrorAction SilentlyContinue
-          Get-Content pinggy_err.txt -ErrorAction SilentlyContinue
-          Write-Host "========================================"
-          Write-Host "Cari baris yang berawalan tcp:// (Misal: tcp://xxxx.a.free.pinggy.link:12345)"
-        shell: powershell
+          # Tunggu 15 detik agar server Pinggy memberikan URL-nya
+          sleep 15
+          
+          echo "========================================"
+          echo "LOG KONEKSI:"
+          cat pinggy.log
+          echo "========================================"
+          echo "Cari baris yang berawalan tcp:// (Misal: tcp://xxxx.a.free.pinggy.link:12345)"
 
       - name: Menjaga RDP Tetap Aktif
         run: |
