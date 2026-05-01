@@ -1,4 +1,4 @@
-name: Setup Windows RDP via Bore
+name: Setup Windows RDP via Pinggy
 
 on: 
   workflow_dispatch:
@@ -18,32 +18,27 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         shell: powershell
 
-      - name: Install dan Jalankan Bore (Pengganti Ngrok)
+      - name: Menjalankan Pinggy Tunnel
         run: |
-          Write-Host "Mengunduh Bore..."
-          Invoke-WebRequest -Uri 'https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-pc-windows-msvc.zip' -OutFile 'bore.zip'
-          Expand-Archive -Path bore.zip -DestinationPath .
+          Write-Host "Membuka jalur tunnel menggunakan Pinggy..."
+          # Menjalankan SSH di background untuk tunneling
+          Start-Process -FilePath "ssh" -ArgumentList "-p 443 -R0:localhost:3389 -o StrictHostKeyChecking=no -o ServerAliveInterval=30 tcp@a.pinggy.io" -NoNewWindow -RedirectStandardOutput "pinggy_out.txt" -RedirectStandardError "pinggy_err.txt"
           
-          Write-Host "Menjalankan tunnel Bore untuk Port 3389 (RDP)..."
-          Start-Process -FilePath .\bore.exe -ArgumentList "local 3389 --to bore.pub" -NoNewWindow -RedirectStandardOutput "bore_out.txt" -RedirectStandardError "bore_err.txt"
-          
-          # Tunggu beberapa detik agar terhubung ke server publik Bore
-          Start-Sleep -Seconds 5
+          # Tunggu sebentar agar server merespons
+          Start-Sleep -Seconds 15
           
           Write-Host "========================================"
-          Write-Host "Log Koneksi Bore:"
-          Get-Content bore_out.txt -ErrorAction SilentlyContinue
-          Get-Content bore_err.txt -ErrorAction SilentlyContinue
+          Write-Host "LOG KONEKSI:"
+          Get-Content pinggy_out.txt -ErrorAction SilentlyContinue
+          Get-Content pinggy_err.txt -ErrorAction SilentlyContinue
           Write-Host "========================================"
-          Write-Host "Cari tulisan seperti 'remote_port=XXXXX' pada log di atas."
-          Write-Host "Alamat RDP Anda adalah -> bore.pub:XXXXX (Ganti XXXXX dengan angka port tersebut)"
+          Write-Host "Cari baris yang berawalan tcp:// (Misal: tcp://xxxx.a.free.pinggy.link:12345)"
         shell: powershell
 
       - name: Menjaga RDP Tetap Aktif
         run: |
           Write-Host "Username: Adysetia"
           Write-Host "Password: Ady@123"
-          Write-Host "Masa aktif maksimal: 6 Jam"
-          # Menahan agar workflow tidak langsung selesai
           Start-Sleep -Seconds 21600
         shell: powershell
+        
