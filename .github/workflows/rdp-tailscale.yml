@@ -48,42 +48,6 @@ jobs:
           choco install winrar dotnet-6.0-desktopruntime -y
         shell: powershell
 
-      - name: Siapkan Environment Modding (dnSpy & UABEAvalonia)
-        run: |
-          Write-Host "Mengunduh dnSpy..."
-          $dnspy_url = "https://github.com/dnSpy/dnSpy/releases/download/v6.1.8/dnSpy-net-win64.zip"
-          Invoke-WebRequest -Uri $dnspy_url -OutFile "C:\Users\Adysetia\Desktop\dnSpy.zip"
-          Expand-Archive -Path "C:\Users\Adysetia\Desktop\dnSpy.zip" -DestinationPath "C:\Users\Adysetia\Desktop\dnSpy"
-          Remove-Item "C:\Users\Adysetia\Desktop\dnSpy.zip"
-
-          Write-Host "Mengunduh UABEAvalonia..."
-          $uabea_url = (Invoke-RestMethod https://api.github.com/repos/nesrak1/UABEA/releases/latest).assets | Where-Object { $_.name -match "windows-x64" } | Select-Object -ExpandProperty browser_download_url
-          if ([string]::IsNullOrEmpty($uabea_url)) {
-              $uabea_url = "https://github.com/nesrak1/UABEA/releases/download/v3.0.0-preview4/UABEAvalonia_windows-x64_3.0.0-preview4.zip"
-          }
-          Invoke-WebRequest -Uri $uabea_url -OutFile "C:\Users\Adysetia\Desktop\UABEA.zip"
-          Expand-Archive -Path "C:\Users\Adysetia\Desktop\UABEA.zip" -DestinationPath "C:\Users\Adysetia\Desktop\UABEA"
-          Remove-Item "C:\Users\Adysetia\Desktop\UABEA.zip"
-        shell: powershell
-
-      - name: Membuat Shortcut di Desktop
-        run: |
-          Write-Host "Membuat Shortcut untuk dnSpy dan UABEA..."
-          $WshShell = New-Object -comObject WScript.Shell
-          
-          # Shortcut dnSpy
-          $dnSpyShortcut = $WshShell.CreateShortcut("C:\Users\Adysetia\Desktop\dnSpy.lnk")
-          $dnSpyShortcut.TargetPath = "C:\Users\Adysetia\Desktop\dnSpy\dnSpy.exe"
-          $dnSpyShortcut.WorkingDirectory = "C:\Users\Adysetia\Desktop\dnSpy"
-          $dnSpyShortcut.Save()
-
-          # Shortcut UABEA
-          $uabeaShortcut = $WshShell.CreateShortcut("C:\Users\Adysetia\Desktop\UABEAvalonia.lnk")
-          $uabeaShortcut.TargetPath = "C:\Users\Adysetia\Desktop\UABEA\UABEAvalonia.exe"
-          $uabeaShortcut.WorkingDirectory = "C:\Users\Adysetia\Desktop\UABEA"
-          $uabeaShortcut.Save()
-        shell: powershell
-
       - name: Persiapan Ekstraksi & Install ADB
         run: |
           Write-Host "Mengunduh Android Platform Tools (ADB)..."
