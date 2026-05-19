@@ -45,12 +45,12 @@ jobs:
           choco install winrar dotnet-6.0-desktopruntime -y
         shell: powershell
 
-      - name: Install IDM
+      - name: Install IDM (Dipisah agar aman)
         run: |
           Write-Host "Menginstal Internet Download Manager..."
           choco install idm -y
         shell: powershell
-        continue-on-error: true # Mencegah mesin mati jika IDM memunculkan pop-up lisensi
+        continue-on-error: true
 
       - name: Siapkan Environment Modding (dnSpy & UABEAvalonia)
         run: |
@@ -135,3 +135,4 @@ jobs:
             Start-Sleep -Seconds 300
           }
         shell: powershell
+        
