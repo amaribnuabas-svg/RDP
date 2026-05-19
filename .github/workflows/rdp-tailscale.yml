@@ -39,11 +39,18 @@ jobs:
         shell: powershell
         continue-on-error: true
 
-      - name: Install Software Dasar (WinRAR, IDM, .NET 6.0)
+      - name: Install WinRAR & .NET 6.0
         run: |
-          Write-Host "Menginstal WinRAR, Internet Download Manager, dan .NET Desktop Runtime 6.0..."
-          choco install winrar internetdownloadmanager dotnet-6.0-desktopruntime -y
+          Write-Host "Menginstal WinRAR dan .NET Desktop Runtime 6.0..."
+          choco install winrar dotnet-6.0-desktopruntime -y
         shell: powershell
+
+      - name: Install IDM
+        run: |
+          Write-Host "Menginstal Internet Download Manager..."
+          choco install idm -y
+        shell: powershell
+        continue-on-error: true # Mencegah mesin mati jika IDM memunculkan pop-up lisensi
 
       - name: Siapkan Environment Modding (dnSpy & UABEAvalonia)
         run: |
