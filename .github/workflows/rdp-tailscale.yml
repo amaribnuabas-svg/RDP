@@ -9,10 +9,16 @@ jobs:
     timeout-minutes: 360 
     steps:
       - name: Install dan Connect Tailscale
-        uses: tailscale/github-action@v2
-        with:
-          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-          version: latest
+        run: |
+          Write-Host "Mengunduh Tailscale..."
+          Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
+          
+          Write-Host "Menginstal Tailscale..."
+          Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
+          
+          Write-Host "Menjalankan dan autentikasi Tailscale..."
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended
+        shell: powershell
 
       - name: Membuat User dan Mengaktifkan RDP
         run: |
@@ -36,7 +42,6 @@ jobs:
       - name: Install Software Dasar (WinRAR, IDM, .NET 6.0)
         run: |
           Write-Host "Menginstal WinRAR, Internet Download Manager, dan .NET Desktop Runtime 6.0..."
-          # Menggunakan Chocolatey untuk instalasi otomatis tanpa dialog (silent install)
           choco install winrar internetdownloadmanager dotnet-6.0-desktopruntime -y
         shell: powershell
 
@@ -49,10 +54,8 @@ jobs:
           Remove-Item "C:\Users\Adysetia\Desktop\dnSpy.zip"
 
           Write-Host "Mengunduh UABEAvalonia..."
-          # Mengambil release Windows x64 terbaru menggunakan GitHub API
           $uabea_url = (Invoke-RestMethod https://api.github.com/repos/nesrak1/UABEA/releases/latest).assets | Where-Object { $_.name -match "windows-x64" } | Select-Object -ExpandProperty browser_download_url
           if ([string]::IsNullOrEmpty($uabea_url)) {
-              # Fallback jika API gagal
               $uabea_url = "https://github.com/nesrak1/UABEA/releases/download/v3.0.0-preview4/UABEAvalonia_windows-x64_3.0.0-preview4.zip"
           }
           Invoke-WebRequest -Uri $uabea_url -OutFile "C:\Users\Adysetia\Desktop\UABEA.zip"
@@ -108,7 +111,7 @@ jobs:
 
       - name: Menampilkan Informasi Koneksi
         run: |
-          $tailscale_ip = tailscale ip -4
+          $tailscale_ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "========================================"
           Write-Host "RDP Server is running. You can connect now."
           Write-Host "Username   : Adysetia"
@@ -125,4 +128,3 @@ jobs:
             Start-Sleep -Seconds 300
           }
         shell: powershell
-        
