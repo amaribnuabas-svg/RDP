@@ -26,6 +26,9 @@ jobs:
           net user Adysetia "${{ secrets.RDP_PASSWORD }}" /add
           net localgroup administrators Adysetia /add
           
+          Write-Host "Membuat Folder Desktop secara paksa..."
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop"
+          
           Write-Host "Mengaktifkan RDP..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
