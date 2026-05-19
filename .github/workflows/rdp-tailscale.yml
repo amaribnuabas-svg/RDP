@@ -1,4 +1,4 @@
-name: Setup Windows RDP via Tailscale
+name: Setup Windows RDP Ultimate
 
 on: 
   workflow_dispatch:
@@ -6,27 +6,18 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 360 
     steps:
       - name: Install dan Connect Tailscale
-        run: |
-          Write-Host "Mengunduh Tailscale..."
-          Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
-          
-          Write-Host "Menginstal Tailscale secara diam-diam (silent)..."
-          Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
-          
-          Write-Host "Menjalankan dan autentikasi Tailscale..."
-          # Pastikan path instalasi sesuai dengan default Windows
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended
-          
-          Write-Host "Tailscale IP:"
-          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-        shell: powershell
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
 
       - name: Membuat User dan Mengaktifkan RDP
         run: |
           Write-Host "Menambahkan User..."
-          net user Adysetia Ady@123 /add
+          net user Adysetia "${{ secrets.RDP_PASSWORD }}" /add
           net localgroup administrators Adysetia /add
           
           Write-Host "Mengaktifkan RDP..."
@@ -34,14 +25,104 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         shell: powershell
 
-      - name: Menjaga RDP Tetap Aktif
+      - name: Optimasi Performa Mesin (Disable Defender)
         run: |
+          Write-Host "Mematikan Windows Defender untuk menghemat RAM..."
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Set-MpPreference -DisableArchiveScanning $true
+        shell: powershell
+        continue-on-error: true
+
+      - name: Install Software Dasar (WinRAR, IDM, .NET 6.0)
+        run: |
+          Write-Host "Menginstal WinRAR, Internet Download Manager, dan .NET Desktop Runtime 6.0..."
+          # Menggunakan Chocolatey untuk instalasi otomatis tanpa dialog (silent install)
+          choco install winrar internetdownloadmanager dotnet-6.0-desktopruntime -y
+        shell: powershell
+
+      - name: Siapkan Environment Modding (dnSpy & UABEAvalonia)
+        run: |
+          Write-Host "Mengunduh dnSpy..."
+          $dnspy_url = "https://github.com/dnSpy/dnSpy/releases/download/v6.1.8/dnSpy-net-win64.zip"
+          Invoke-WebRequest -Uri $dnspy_url -OutFile "C:\Users\Adysetia\Desktop\dnSpy.zip"
+          Expand-Archive -Path "C:\Users\Adysetia\Desktop\dnSpy.zip" -DestinationPath "C:\Users\Adysetia\Desktop\dnSpy"
+          Remove-Item "C:\Users\Adysetia\Desktop\dnSpy.zip"
+
+          Write-Host "Mengunduh UABEAvalonia..."
+          # Mengambil release Windows x64 terbaru menggunakan GitHub API
+          $uabea_url = (Invoke-RestMethod https://api.github.com/repos/nesrak1/UABEA/releases/latest).assets | Where-Object { $_.name -match "windows-x64" } | Select-Object -ExpandProperty browser_download_url
+          if ([string]::IsNullOrEmpty($uabea_url)) {
+              # Fallback jika API gagal
+              $uabea_url = "https://github.com/nesrak1/UABEA/releases/download/v3.0.0-preview4/UABEAvalonia_windows-x64_3.0.0-preview4.zip"
+          }
+          Invoke-WebRequest -Uri $uabea_url -OutFile "C:\Users\Adysetia\Desktop\UABEA.zip"
+          Expand-Archive -Path "C:\Users\Adysetia\Desktop\UABEA.zip" -DestinationPath "C:\Users\Adysetia\Desktop\UABEA"
+          Remove-Item "C:\Users\Adysetia\Desktop\UABEA.zip"
+        shell: powershell
+
+      - name: Membuat Shortcut di Desktop
+        run: |
+          Write-Host "Membuat Shortcut untuk dnSpy dan UABEA..."
+          $WshShell = New-Object -comObject WScript.Shell
+          
+          # Shortcut dnSpy
+          $dnSpyShortcut = $WshShell.CreateShortcut("C:\Users\Adysetia\Desktop\dnSpy.lnk")
+          $dnSpyShortcut.TargetPath = "C:\Users\Adysetia\Desktop\dnSpy\dnSpy.exe"
+          $dnSpyShortcut.WorkingDirectory = "C:\Users\Adysetia\Desktop\dnSpy"
+          $dnSpyShortcut.Save()
+
+          # Shortcut UABEA
+          $uabeaShortcut = $WshShell.CreateShortcut("C:\Users\Adysetia\Desktop\UABEAvalonia.lnk")
+          $uabeaShortcut.TargetPath = "C:\Users\Adysetia\Desktop\UABEA\UABEAvalonia.exe"
+          $uabeaShortcut.WorkingDirectory = "C:\Users\Adysetia\Desktop\UABEA"
+          $uabeaShortcut.Save()
+        shell: powershell
+
+      - name: Persiapan Ekstraksi & Install ADB
+        run: |
+          Write-Host "Mengunduh Android Platform Tools (ADB)..."
+          $adb_url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+          Invoke-WebRequest -Uri $adb_url -OutFile "C:\Users\Adysetia\Desktop\platform-tools.zip"
+          
+          Write-Host "Mengekstrak file..."
+          Expand-Archive -Path "C:\Users\Adysetia\Desktop\platform-tools.zip" -DestinationPath "C:\Users\Adysetia\Desktop\ADB"
+          Remove-Item "C:\Users\Adysetia\Desktop\platform-tools.zip"
+          
+          Write-Host "Mendaftarkan ADB ke System PATH..."
+          $oldPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+          $newPath = $oldPath + ";C:\Users\Adysetia\Desktop\ADB\platform-tools"
+          [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+
+          Write-Host "Membuat Shortcut Batch Script untuk Ekstraksi..."
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop\Ekstraksi_Cache"
+          
+          $batchContent = "@echo off`n" +
+                          "echo Pastikan sudah connect ADB via Tailscale IP HP Anda...`n" +
+                          "echo Menarik file cache...`n" +
+                          "adb pull /sdcard/Android/data/com.package.name/files/UnityCache/Shared C:\Users\Adysetia\Desktop\Ekstraksi_Cache\Shared`n" +
+                          "adb pull /sdcard/Android/data/com.package.name/files/UnityCache/common C:\Users\Adysetia\Desktop\Ekstraksi_Cache\common`n" +
+                          "echo Selesai!`n" +
+                          "pause"
+          Set-Content -Path "C:\Users\Adysetia\Desktop\Pull_Data.bat" -Value $batchContent
+        shell: powershell
+
+      - name: Menampilkan Informasi Koneksi
+        run: |
+          $tailscale_ip = tailscale ip -4
           Write-Host "========================================"
           Write-Host "RDP Server is running. You can connect now."
-          Write-Host "Username: Adysetia"
-          Write-Host "Password: Ady@123"
-          Write-Host "Silakan cek log 'Install dan Connect Tailscale' di atas untuk melihat IP Tailscale Anda."
+          Write-Host "Username   : Adysetia"
+          Write-Host "Password   : [Gunakan password di GitHub Secrets]"
+          Write-Host "IP Address : $tailscale_ip"
           Write-Host "========================================"
-          # Menahan agar workflow tidak langsung selesai
-          Start-Sleep -Seconds 21600
         shell: powershell
+
+      - name: Menjaga RDP Tetap Aktif (Keep-Alive)
+        run: |
+          Write-Host "Sesi aktif. Mesin akan berjalan hingga maksimal 6 jam."
+          Write-Host "Tekan Cancel workflow di GitHub untuk mematikan mesin."
+          while ($true) {
+            Start-Sleep -Seconds 300
+          }
+        shell: powershell
+        
