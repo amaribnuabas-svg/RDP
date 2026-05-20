@@ -18,7 +18,7 @@ jobs:
           Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
           
           Write-Host "Menjalankan dan autentikasi Tailscale..."
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname="rdp-abadi"
         shell: powershell
 
       - name: Membuat User dan Mengaktifkan RDP
