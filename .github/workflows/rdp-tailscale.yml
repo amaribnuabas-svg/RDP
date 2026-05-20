@@ -8,23 +8,22 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 360 
     steps:
-            - name: Install dan Connect Tailscale
+      - name: Install dan Connect Tailscale (Fix Corrupted)
         run: |
-          Write-Host "Mengunduh Tailscale dengan pengalihan aman..."
-          # Menggunakan WebClient untuk memastikan file .exe terunduh utuh tanpa korup
+          Write-Host "Mengunduh Tailscale dengan metode aman..."
           $url = "https://tailscale.com"
           $wc = New-Object System.Net.WebClient
           $wc.DownloadFile($url, "tailscale-setup.exe")
           
-          # Cek ukuran file untuk memastikan tidak 0 KB
+          # Proteksi: Memastikan file terunduh dengan sempurna
           $fileSize = (Get-Item "tailscale-setup.exe").Length
-          Write-Host "Ukuran file yang diunduh: $fileSize bytes"
-          if ($fileSize -lt 1000) { throw "Unduhan gagal atau file korup!" }
+          Write-Host "Ukuran file terunduh: $fileSize bytes"
+          if ($fileSize -lt 1000000) { throw "Unduhan gagal atau file rusak!" }
           
           Write-Host "Menginstal Tailscale..."
           Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
           
-          Write-Host "Menjalankan dan autentikasi Tailscale..."
+          Write-Host "Menjalankan dan autentikasi Tailscale dengan Hostname Tetap..."
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname=rdp-abadi
         shell: powershell
 
@@ -68,6 +67,7 @@ jobs:
           Write-Host "RDP Server is running dengan MagicDNS."
           Write-Host "Username   : Adysetia"
           Write-Host "Password   : [Gunakan password di GitHub Secrets]"
+          Write-Host "Cara Konek : rdp-abadi.[NAMA_TAILNET_ANDA]"
           Write-Host "========================================"
         shell: powershell
 
@@ -78,4 +78,3 @@ jobs:
             Start-Sleep -Seconds 300
           }
         shell: powershell
-        
