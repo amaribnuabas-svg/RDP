@@ -11,20 +11,22 @@ jobs:
       - name: Install dan Connect Tailscale
         run: |
           Write-Host "Mengunduh Tailscale..."
-          Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
+          Invoke-WebRequest -Uri 'https://tailscale.com' -OutFile 'tailscale-setup.exe'
           
           Write-Host "Menginstal Tailscale..."
           Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
           
           Write-Host "Menjalankan dan autentikasi Tailscale..."
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended
+          # Menggunakan parameter --hostname agar nama mesin di DNS selalu tetap
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname=rdp-abadi
         shell: powershell
 
-      - name: Membuat User dan Mengaktifkan RDP
+      - name: Membuat User dan Mengaktifkan RDP (Full Admin Fix)
         run: |
           Write-Host "Menambahkan User..."
           net user Adysetia "${{ secrets.RDP_PASSWORD }}" /add
           net localgroup administrators Adysetia /add
+          net localgroup "Remote Desktop Users" Adysetia /add
           
           Write-Host "Membuat Folder Desktop secara paksa..."
           New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop"
@@ -32,6 +34,9 @@ jobs:
           Write-Host "Mengaktifkan RDP..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          Write-Host "Mematikan UAC agar User Menjadi Full Admin..."
+          Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0
         shell: powershell
 
       - name: Optimasi Performa Mesin (Disable Defender)
@@ -39,6 +44,8 @@ jobs:
           Write-Host "Mematikan Windows Defender untuk menghemat RAM..."
           Set-MpPreference -DisableRealtimeMonitoring $true
           Set-MpPreference -DisableArchiveScanning $true
+          Set-MpPreference -DisableBehaviorMonitoring $true
+          Set-MpPreference -DisableIOAVProtection $true
         shell: powershell
         continue-on-error: true
 
@@ -50,19 +57,16 @@ jobs:
 
       - name: Menampilkan Informasi Koneksi
         run: |
-          $tailscale_ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "========================================"
-          Write-Host "RDP Server is running. You can connect now."
+          Write-Host "RDP Server is running dengan MagicDNS."
           Write-Host "Username   : Adysetia"
           Write-Host "Password   : [Gunakan password di GitHub Secrets]"
-          Write-Host "IP Address : $tailscale_ip"
           Write-Host "========================================"
         shell: powershell
 
       - name: Menjaga RDP Tetap Aktif (Keep-Alive)
         run: |
           Write-Host "Sesi aktif. Mesin akan berjalan hingga maksimal 6 jam."
-          Write-Host "Tekan Cancel workflow di GitHub untuk mematikan mesin."
           while ($true) {
             Start-Sleep -Seconds 300
           }
