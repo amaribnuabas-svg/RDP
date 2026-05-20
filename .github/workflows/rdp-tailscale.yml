@@ -10,23 +10,15 @@ jobs:
 
     steps:
       - name: Install dan Connect Tailscale
-        env:
-          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
           Write-Host "Mengunduh Tailscale..."
-          $url = "[pkgs.tailscale.com](https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe)"
-          $wc = New-Object System.Net.WebClient
-          $wc.DownloadFile($url, "tailscale-setup.exe")
-
-          $fileSize = (Get-Item "tailscale-setup.exe").Length
-          Write-Host "Ukuran file: $fileSize bytes"
-          if ($fileSize -lt 1000000) { throw "Unduhan gagal atau file rusak!" }
-
+          Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
+          
           Write-Host "Menginstal Tailscale..."
           Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
-
-          Write-Host "Autentikasi Tailscale..."
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTHKEY --unattended --hostname=rdp-abadi
+          
+          Write-Host "Menjalankan dan autentikasi Tailscale..."
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended
         shell: powershell
 
       - name: Membuat User dan Mengaktifkan RDP
