@@ -48,34 +48,6 @@ jobs:
           choco install winrar dotnet-6.0-desktopruntime -y
         shell: powershell
 
-      - name: Persiapan Ekstraksi & Install ADB
-        run: |
-          Write-Host "Mengunduh Android Platform Tools (ADB)..."
-          $adb_url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
-          Invoke-WebRequest -Uri $adb_url -OutFile "C:\Users\Adysetia\Desktop\platform-tools.zip"
-          
-          Write-Host "Mengekstrak file..."
-          Expand-Archive -Path "C:\Users\Adysetia\Desktop\platform-tools.zip" -DestinationPath "C:\Users\Adysetia\Desktop\ADB"
-          Remove-Item "C:\Users\Adysetia\Desktop\platform-tools.zip"
-          
-          Write-Host "Mendaftarkan ADB ke System PATH..."
-          $oldPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-          $newPath = $oldPath + ";C:\Users\Adysetia\Desktop\ADB\platform-tools"
-          [Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
-
-          Write-Host "Membuat Shortcut Batch Script untuk Ekstraksi..."
-          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop\Ekstraksi_Cache"
-          
-          $batchContent = "@echo off`n" +
-                          "echo Pastikan sudah connect ADB via Tailscale IP HP Anda...`n" +
-                          "echo Menarik file cache...`n" +
-                          "adb pull /sdcard/Android/data/com.package.name/files/UnityCache/Shared C:\Users\Adysetia\Desktop\Ekstraksi_Cache\Shared`n" +
-                          "adb pull /sdcard/Android/data/com.package.name/files/UnityCache/common C:\Users\Adysetia\Desktop\Ekstraksi_Cache\common`n" +
-                          "echo Selesai!`n" +
-                          "pause"
-          Set-Content -Path "C:\Users\Adysetia\Desktop\Pull_Data.bat" -Value $batchContent
-        shell: powershell
-
       - name: Menampilkan Informasi Koneksi
         run: |
           $tailscale_ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
