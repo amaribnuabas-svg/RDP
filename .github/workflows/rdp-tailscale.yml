@@ -9,35 +9,33 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Install dan Connect Tailscale
+      - name: Install dan Connect Tailscale (Silent)
         run: |
-          Write-Host "Mengunduh Tailscale..."
+          $ProgressPreference = 'SilentlyContinue'
+          Write-Host "Mengunduh dan menginstal Tailscale..."
           Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
-          
-          Write-Host "Menginstal Tailscale..."
           Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
           
-          Write-Host "Menjalankan dan autentikasi Tailscale..."
+          Write-Host "Autentikasi Tailscale..."
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname="rdp-abadi"
         shell: powershell
 
-      - name: Membuat User dan Mengaktifkan RDP
+      - name: Membuat User dan Mengaktifkan RDP (Silent)
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
         run: |
-          Write-Host "Menambahkan User..."
-          net user Adysetia "$env:RDP_PASSWORD" /add
-          net localgroup administrators Adysetia /add
-          net localgroup "Remote Desktop Users" Adysetia /add
+          Write-Host "Menyiapkan User, RDP, dan Folder Desktop..."
+          net user Adysetia "$env:RDP_PASSWORD" /add > $null 2>&1
+          net localgroup administrators Adysetia /add > $null 2>&1
+          net localgroup "Remote Desktop Users" Adysetia /add > $null 2>&1
 
-          Write-Host "Membuat Folder Desktop..."
-          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop"
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop" > $null 2>&1
+          
+          # Folder untuk FileZilla Server
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop\SEA" > $null 2>&1
 
-          Write-Host "Mengaktifkan RDP..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-          Write-Host "Mematikan UAC..."
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" > $null 2>&1
           Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0
         shell: powershell
 
@@ -50,17 +48,28 @@ jobs:
         shell: powershell
         continue-on-error: true
 
-      - name: Install WinRAR & .NET 6.0
+      - name: Install WinRAR, .NET 6.0 & FileZilla Server (Silent)
         run: |
-          choco install winrar dotnet-6.0-desktopruntime -y
+          Write-Host "Menginstal WinRAR, .NET 6.0, dan FileZilla Server..."
+          choco install winrar dotnet-6.0-desktopruntime filezilla-server -y --no-progress --limit-output
+
+          Write-Host "Membuka Port Firewall FTP (21) & Passive (20000-20100)..."
+          New-NetFirewallRule -DisplayName "FTP Command Port 21" -Direction Inbound -LocalPort 21 -Protocol TCP -Action Allow > $null 2>&1
+          New-NetFirewallRule -DisplayName "FTP Passive Ports" -Direction Inbound -LocalPort 20000-20100 -Protocol TCP -Action Allow > $null 2>&1
         shell: powershell
 
       - name: Tampilkan Info Koneksi
         run: |
+          $TailscaleIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "========================================"
           Write-Host "RDP Server aktif via Tailscale MagicDNS"
           Write-Host "Username   : Adysetia"
           Write-Host "Host RDP   : rdp-abadi.[NAMA_TAILNET_ANDA]"
+          Write-Host "IP Tailscale: $TailscaleIP"
+          Write-Host "========================================"
+          Write-Host "Akses FTP Server (Konfigurasi User & Password via RDP):"
+          Write-Host "Host FTP   : $TailscaleIP"
+          Write-Host "Passive Port: 20000 - 20100"
           Write-Host "========================================"
         shell: powershell
 
@@ -69,5 +78,4 @@ jobs:
           Write-Host "Sesi aktif. Maksimal 6 jam."
           while ($true) { Start-Sleep -Seconds 300 }
         shell: powershell
-
-Tambah FileZila server ,port 20000 - 20100 , hostnya IP tailscale , usernya: user1, pw nya: Akudankamu1 path nya desktop/SEA
+        
