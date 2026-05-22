@@ -5,7 +5,8 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    # Menggunakan windows-2019 agar mendekati pengalaman Windows 10
+    runs-on: windows-2019
     timeout-minutes: 360
 
     steps:
@@ -30,9 +31,6 @@ jobs:
           net localgroup "Remote Desktop Users" Adysetia /add > $null 2>&1
 
           New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop" > $null 2>&1
-          
-          # Folder untuk FileZilla Server
-          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop\SEA" > $null 2>&1
 
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop" > $null 2>&1
@@ -48,14 +46,10 @@ jobs:
         shell: powershell
         continue-on-error: true
 
-      - name: Install WinRAR, .NET 6.0 & FileZilla Server (Silent)
+      - name: Install WinRAR & .NET 6.0 (Silent)
         run: |
-          Write-Host "Menginstal WinRAR, .NET 6.0, dan FileZilla Server..."
-          choco install winrar dotnet-6.0-desktopruntime filezilla-server -y --no-progress --limit-output
-
-          Write-Host "Membuka Port Firewall FTP (21) & Passive (20000-20100)..."
-          New-NetFirewallRule -DisplayName "FTP Command Port 21" -Direction Inbound -LocalPort 21 -Protocol TCP -Action Allow > $null 2>&1
-          New-NetFirewallRule -DisplayName "FTP Passive Ports" -Direction Inbound -LocalPort 20000-20100 -Protocol TCP -Action Allow > $null 2>&1
+          Write-Host "Menginstal WinRAR dan .NET 6.0..."
+          choco install winrar dotnet-6.0-desktopruntime -y --no-progress --limit-output
         shell: powershell
 
       - name: Tampilkan Info Koneksi
@@ -66,10 +60,6 @@ jobs:
           Write-Host "Username   : Adysetia"
           Write-Host "Host RDP   : rdp-abadi.[NAMA_TAILNET_ANDA]"
           Write-Host "IP Tailscale: $TailscaleIP"
-          Write-Host "========================================"
-          Write-Host "Akses FTP Server (Konfigurasi User & Password via RDP):"
-          Write-Host "Host FTP   : $TailscaleIP"
-          Write-Host "Passive Port: 20000 - 20100"
           Write-Host "========================================"
         shell: powershell
 
