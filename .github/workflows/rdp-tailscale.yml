@@ -55,31 +55,12 @@ jobs:
           choco install winrar dotnet-6.0-desktopruntime -y
         shell: powershell
 
-      - name: Install & Persiapan FileZilla Server
-        run: |
-          Write-Host "Membuat Folder FTP (SEA)..."
-          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop\SEA"
-
-          Write-Host "Menginstal FileZilla Server..."
-          choco install filezilla-server -y
-
-          Write-Host "Membuka Port Firewall FTP (21) & Passive (20000-20100)..."
-          New-NetFirewallRule -DisplayName "FTP Command Port 21" -Direction Inbound -LocalPort 21 -Protocol TCP -Action Allow
-          New-NetFirewallRule -DisplayName "FTP Passive Ports" -Direction Inbound -LocalPort 20000-20100 -Protocol TCP -Action Allow
-        shell: powershell
-
       - name: Tampilkan Info Koneksi
         run: |
-          $TailscaleIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "========================================"
           Write-Host "RDP Server aktif via Tailscale MagicDNS"
           Write-Host "Username   : Adysetia"
           Write-Host "Host RDP   : rdp-abadi.[NAMA_TAILNET_ANDA]"
-          Write-Host "IP Tailscale: $TailscaleIP"
-          Write-Host "========================================"
-          Write-Host "Akses FTP Server:"
-          Write-Host "Host FTP   : $TailscaleIP"
-          Write-Host "Passive Port: 20000 - 20100"
           Write-Host "========================================"
         shell: powershell
 
@@ -88,3 +69,5 @@ jobs:
           Write-Host "Sesi aktif. Maksimal 6 jam."
           while ($true) { Start-Sleep -Seconds 300 }
         shell: powershell
+
+Tambah FileZila server ,port 20000 - 20100 , hostnya IP tailscale , usernya: user1, pw nya: Akudankamu1 path nya desktop/SEA
