@@ -5,35 +5,39 @@ on:
 
 jobs:
   build:
-    # Menggunakan windows-2019 agar mendekati pengalaman Windows 10
-    runs-on: windows-2019
+    runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Install dan Connect Tailscale (Silent)
+      - name: Install dan Connect Tailscale
         run: |
-          $ProgressPreference = 'SilentlyContinue'
-          Write-Host "Mengunduh dan menginstal Tailscale..."
+          Write-Host "Mengunduh Tailscale..."
           Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
+          
+          Write-Host "Menginstal Tailscale..."
           Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
           
-          Write-Host "Autentikasi Tailscale..."
+          Write-Host "Menjalankan dan autentikasi Tailscale..."
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname="rdp-abadi"
         shell: powershell
 
-      - name: Membuat User dan Mengaktifkan RDP (Silent)
+      - name: Membuat User dan Mengaktifkan RDP
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
         run: |
-          Write-Host "Menyiapkan User, RDP, dan Folder Desktop..."
-          net user Adysetia "$env:RDP_PASSWORD" /add > $null 2>&1
-          net localgroup administrators Adysetia /add > $null 2>&1
-          net localgroup "Remote Desktop Users" Adysetia /add > $null 2>&1
+          Write-Host "Menambahkan User..."
+          net user Adysetia "$env:RDP_PASSWORD" /add
+          net localgroup administrators Adysetia /add
+          net localgroup "Remote Desktop Users" Adysetia /add
 
-          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop" > $null 2>&1
+          Write-Host "Membuat Folder Desktop..."
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop"
 
+          Write-Host "Mengaktifkan RDP..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop" > $null 2>&1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+          Write-Host "Mematikan UAC..."
           Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0
         shell: powershell
 
@@ -46,20 +50,17 @@ jobs:
         shell: powershell
         continue-on-error: true
 
-      - name: Install WinRAR & .NET 6.0 (Silent)
+      - name: Install WinRAR & .NET 6.0
         run: |
-          Write-Host "Menginstal WinRAR dan .NET 6.0..."
-          choco install winrar dotnet-6.0-desktopruntime -y --no-progress --limit-output
+          choco install winrar dotnet-6.0-desktopruntime -y
         shell: powershell
 
       - name: Tampilkan Info Koneksi
         run: |
-          $TailscaleIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "========================================"
           Write-Host "RDP Server aktif via Tailscale MagicDNS"
           Write-Host "Username   : Adysetia"
           Write-Host "Host RDP   : rdp-abadi.[NAMA_TAILNET_ANDA]"
-          Write-Host "IP Tailscale: $TailscaleIP"
           Write-Host "========================================"
         shell: powershell
 
@@ -68,4 +69,3 @@ jobs:
           Write-Host "Sesi aktif. Maksimal 6 jam."
           while ($true) { Start-Sleep -Seconds 300 }
         shell: powershell
-        
