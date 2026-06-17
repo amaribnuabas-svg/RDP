@@ -1,0 +1,85 @@
+name: Setup Windows RDP Ultimate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install dan Connect Tailscale
+        run: |
+          Write-Host "Mengunduh Tailscale..."
+          Invoke-WebRequest -Uri 'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' -OutFile 'tailscale-setup.exe'
+          
+          Write-Host "Menginstal Tailscale..."
+          Start-Process -FilePath '.\tailscale-setup.exe' -ArgumentList '/quiet' -Wait
+          
+          Write-Host "Menjalankan dan autentikasi Tailscale..."
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname="rdp-abadi"
+        shell: powershell
+
+      - name: Membuat User dan Mengaktifkan RDP
+        env:
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+        run: |
+          Write-Host "Menambahkan User..."
+          net user Adysetia "$env:RDP_PASSWORD" /add
+          net localgroup administrators Adysetia /add
+          net localgroup "Remote Desktop Users" Adysetia /add
+
+          Write-Host "Membuat Folder Desktop..."
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop"
+
+          Write-Host "Mengaktifkan RDP..."
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+          Write-Host "Mematikan UAC..."
+          Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0
+        shell: powershell
+
+      - name: Optimasi Performa (Disable Defender)
+        run: |
+          Set-MpPreference -DisableRealtimeMonitoring $true
+          Set-MpPreference -DisableArchiveScanning $true
+          Set-MpPreference -DisableBehaviorMonitoring $true
+          Set-MpPreference -DisableIOAVProtection $true
+        shell: powershell
+        continue-on-error: true
+
+      - name: Install Python 3.13.0 & Requirements
+        run: |
+          Write-Host "Mengunduh installer Python 3.13.0..."
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe" -OutFile "python-installer.exe"
+          
+          Write-Host "Menginstal Python 3.13.0 (Otomatis masuk ke PATH)..."
+          Start-Process -FilePath ".\python-installer.exe" -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1" -Wait
+          
+          Write-Host "Memperbarui PIP ke versi terbaru..."
+          # Menggunakan path absolut karena environment variable PATH baru akan ter-refresh setelah buka CMD/Powershell baru di RDP
+          & "C:\Program Files\Python313\python.exe" -m pip install --upgrade pip
+          
+          Write-Host "Menginstal Requirements (Silakan ubah jika ada library tambahan)..."
+          & "C:\Program Files\Python313\python.exe" -m pip install requests pandas numpy openpyxl selenium beautifulsoup4
+          
+          Write-Host "Instalasi Python Selesai!"
+        shell: powershell
+
+      - name: Tampilkan Info Koneksi
+        run: |
+          Write-Host "========================================"
+          Write-Host "RDP Server aktif via Tailscale MagicDNS"
+          Write-Host "Username   : Adysetia"
+          Write-Host "Host RDP   : rdp-abadi.[NAMA_TAILNET_ANDA]"
+          Write-Host "========================================"
+        shell: powershell
+
+      - name: Keep-Alive
+        run: |
+          Write-Host "Sesi aktif. Maksimal 6 jam."
+          while ($true) { Start-Sleep -Seconds 300 }
+        shell: powershell
+
