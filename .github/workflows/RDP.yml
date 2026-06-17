@@ -21,27 +21,6 @@ jobs:
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname="rdp-abadi"
         shell: powershell
 
-      - name: Uninstall / Hapus Python Bawaan
-        run: |
-          Write-Host "Menghapus Python dari Hosted Tool Cache..."
-          if (Test-Path "C:\hostedtoolcache\windows\Python") {
-              Remove-Item -Recurse -Force "C:\hostedtoolcache\windows\Python" -ErrorAction SilentlyContinue
-          }
-          
-          Write-Host "Mencoba uninstall Python via Chocolatey (jika ada)..."
-          choco uninstall python -y --force | Out-Null
-          
-          Write-Host "Membersihkan direktori Python dari System PATH..."
-          $MachinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
-          $NewMachinePath = ($MachinePath.Split(';') | Where-Object { $_ -notmatch 'Python' -and $_ -notmatch 'Miniconda' -and $_ -notmatch 'hostedtoolcache' }) -join ';'
-          [Environment]::SetEnvironmentVariable("Path", $NewMachinePath, "Machine")
-          
-          $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-          $NewUserPath = ($UserPath.Split(';') | Where-Object { $_ -notmatch 'Python' -and $_ -notmatch 'Miniconda' -and $_ -notmatch 'hostedtoolcache' }) -join ';'
-          [Environment]::SetEnvironmentVariable("Path", $NewUserPath, "User")
-        shell: powershell
-        continue-on-error: true
-
       - name: Membuat User dan Mengaktifkan RDP
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
