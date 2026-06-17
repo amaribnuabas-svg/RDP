@@ -21,6 +21,27 @@ jobs:
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --unattended --hostname="rdp-abadi"
         shell: powershell
 
+      - name: Uninstall / Hapus Python Bawaan
+        run: |
+          Write-Host "Menghapus Python dari Hosted Tool Cache..."
+          if (Test-Path "C:\hostedtoolcache\windows\Python") {
+              Remove-Item -Recurse -Force "C:\hostedtoolcache\windows\Python" -ErrorAction SilentlyContinue
+          }
+          
+          Write-Host "Mencoba uninstall Python via Chocolatey (jika ada)..."
+          choco uninstall python -y --force | Out-Null
+          
+          Write-Host "Membersihkan direktori Python dari System PATH..."
+          $MachinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+          $NewMachinePath = ($MachinePath.Split(';') | Where-Object { $_ -notmatch 'Python' -and $_ -notmatch 'Miniconda' -and $_ -notmatch 'hostedtoolcache' }) -join ';'
+          [Environment]::SetEnvironmentVariable("Path", $NewMachinePath, "Machine")
+          
+          $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          $NewUserPath = ($UserPath.Split(';') | Where-Object { $_ -notmatch 'Python' -and $_ -notmatch 'Miniconda' -and $_ -notmatch 'hostedtoolcache' }) -join ';'
+          [Environment]::SetEnvironmentVariable("Path", $NewUserPath, "User")
+        shell: powershell
+        continue-on-error: true
+
       - name: Membuat User dan Mengaktifkan RDP
         env:
           RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
@@ -50,24 +71,6 @@ jobs:
         shell: powershell
         continue-on-error: true
 
-      - name: Install Python 3.13.0 & Requirements
-        run: |
-          Write-Host "Mengunduh installer Python 3.13.0..."
-          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.13.0/python-3.13.0-amd64.exe" -OutFile "python-installer.exe"
-          
-          Write-Host "Menginstal Python 3.13.0 (Otomatis masuk ke PATH)..."
-          Start-Process -FilePath ".\python-installer.exe" -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_pip=1" -Wait
-          
-          Write-Host "Memperbarui PIP ke versi terbaru..."
-          # Menggunakan path absolut karena environment variable PATH baru akan ter-refresh setelah buka CMD/Powershell baru di RDP
-          & "C:\Program Files\Python313\python.exe" -m pip install --upgrade pip
-          
-          Write-Host "Menginstal Requirements (Silakan ubah jika ada library tambahan)..."
-          & "C:\Program Files\Python313\python.exe" -m pip install requests pandas numpy openpyxl selenium beautifulsoup4
-          
-          Write-Host "Instalasi Python Selesai!"
-        shell: powershell
-
       - name: Tampilkan Info Koneksi
         run: |
           Write-Host "========================================"
@@ -82,3 +85,4 @@ jobs:
           Write-Host "Sesi aktif. Maksimal 6 jam."
           while ($true) { Start-Sleep -Seconds 300 }
         shell: powershell
+        
