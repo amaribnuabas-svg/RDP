@@ -50,12 +50,34 @@ jobs:
         shell: powershell
         continue-on-error: true
 
+      - name: Download dan Install Android NDK
+        run: |
+          Write-Host "Membuat direktori C:\Android..."
+          New-Item -ItemType Directory -Force -Path "C:\Android"
+          
+          Write-Host "Mengunduh Android NDK (r26d)..."
+          Invoke-WebRequest -Uri "https://dl.google.com/android/repository/android-ndk-r26d-windows.zip" -OutFile "C:\Android\ndk.zip"
+          
+          Write-Host "Mengekstrak Android NDK (ini memakan waktu sekitar 1-3 menit)..."
+          Expand-Archive -Path "C:\Android\ndk.zip" -DestinationPath "C:\Android" -Force
+          
+          Write-Host "Menambahkan NDK ke System PATH..."
+          $ndkPath = "C:\Android\android-ndk-r26d"
+          [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$ndkPath", [EnvironmentVariableTarget]::Machine)
+          
+          Write-Host "Membersihkan file zip..."
+          Remove-Item "C:\Android\ndk.zip"
+          
+          Write-Host "Android NDK siap digunakan di $ndkPath!"
+        shell: powershell
+
       - name: Tampilkan Info Koneksi
         run: |
           Write-Host "========================================"
           Write-Host "RDP Server aktif via Tailscale MagicDNS"
           Write-Host "Username   : Adysetia"
           Write-Host "Host RDP   : rdp-abadi.[NAMA_TAILNET_ANDA]"
+          Write-Host "Lokasi NDK : C:\Android\android-ndk-r26d"
           Write-Host "========================================"
         shell: powershell
 
