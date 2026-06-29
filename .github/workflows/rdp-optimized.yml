@@ -1,0 +1,253 @@
+name: 🖥️ RDP Cloud Compute
+
+on:
+  workflow_dispatch:
+    inputs:
+      install_extras:
+        description: 'Install extra tools? (yes/no)'
+        required: false
+        default: 'yes'
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      # ─────────────────────────────────────────────
+      # 1. OPTIMASI SISTEM — Nonaktifkan bottleneck
+      # ─────────────────────────────────────────────
+      - name: ⚡ Optimasi Sistem & Bebaskan Resource
+        shell: powershell
+        run: |
+          Write-Host ">>> Menonaktifkan Windows Defender Real-Time..." -ForegroundColor Cyan
+          Set-MpPreference -DisableRealtimeMonitoring $true `
+                           -DisableArchiveScanning $true `
+                           -DisableBehaviorMonitoring $true `
+                           -DisableIOAVProtection $true `
+                           -DisableScriptScanning $true `
+                           -MAPSReporting Disabled `
+                           -SubmitSamplesConsent NeverSend 2>$null
+
+          Write-Host ">>> Menonaktifkan Windows Update (hemat CPU/disk)..." -ForegroundColor Cyan
+          Stop-Service -Name "wuauserv" -Force -ErrorAction SilentlyContinue
+          Set-Service  -Name "wuauserv" -StartupType Disabled -ErrorAction SilentlyContinue
+
+          Write-Host ">>> Menonaktifkan layanan berat tidak perlu..." -ForegroundColor Cyan
+          $services = @('DiagTrack','dmwappushservice','SysMain','WSearch')
+          foreach ($svc in $services) {
+            Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+            Set-Service  -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
+          }
+
+          Write-Host ">>> Set Power Plan ke High Performance..." -ForegroundColor Cyan
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null
+
+          Write-Host ">>> Hapus temp files & expand disk space..." -ForegroundColor Cyan
+          Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -Path "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+
+          Write-Host ">>> Nonaktifkan UAC..." -ForegroundColor Cyan
+          Set-ItemProperty "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" `
+                           -Name "EnableLUA" -Value 0
+
+          Write-Host "[OK] Optimasi sistem selesai." -ForegroundColor Green
+
+      # ─────────────────────────────────────────────
+      # 2. SETUP USER & RDP
+      # ─────────────────────────────────────────────
+      - name: 👤 Buat User & Aktifkan RDP
+        shell: powershell
+        env:
+          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+        run: |
+          Write-Host ">>> Membuat user Adysetia..." -ForegroundColor Cyan
+          $secPass = ConvertTo-SecureString "$env:RDP_PASSWORD" -AsPlainText -Force
+          New-LocalUser -Name "Adysetia" -Password $secPass `
+                        -FullName "Adysetia" -Description "RDP User" `
+                        -PasswordNeverExpires -ErrorAction SilentlyContinue
+
+          Add-LocalGroupMember -Group "Administrators"        -Member "Adysetia" -ErrorAction SilentlyContinue
+          Add-LocalGroupMember -Group "Remote Desktop Users"  -Member "Adysetia" -ErrorAction SilentlyContinue
+
+          Write-Host ">>> Aktifkan RDP & izinkan di Firewall..." -ForegroundColor Cyan
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+                           -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" `
+                           -Name "UserAuthentication" -Value 0        # Nonaktifkan NLA agar mudah konek
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          netsh advfirewall firewall add rule name="RDP-In" protocol=TCP dir=in localport=3389 action=allow | Out-Null
+
+          Write-Host ">>> Buat folder desktop user..." -ForegroundColor Cyan
+          New-Item -ItemType Directory -Force -Path "C:\Users\Adysetia\Desktop" | Out-Null
+
+          Write-Host "[OK] User & RDP siap." -ForegroundColor Green
+
+      # ─────────────────────────────────────────────
+      # 3. INSTALL DEV TOOLS
+      # ─────────────────────────────────────────────
+      - name: 🛠️ Install Dev Tools (Git, Node, Python, dll)
+        shell: powershell
+        if: ${{ github.event.inputs.install_extras != 'no' }}
+        run: |
+          # Gunakan winget (sudah tersedia di windows-latest)
+          Write-Host ">>> Pastikan winget up to date..." -ForegroundColor Cyan
+          winget upgrade --id Microsoft.Winget.Source --accept-source-agreements --accept-package-agreements 2>$null
+
+          $tools = @(
+            @{Id="Git.Git";              Name="Git"},
+            @{Id="OpenJS.NodeJS.LTS";    Name="Node.js LTS"},
+            @{Id="Python.Python.3.12";   Name="Python 3.12"},
+            @{Id="Microsoft.VisualStudioCode"; Name="VS Code"},
+            @{Id="Rustlang.Rustup";      Name="Rust / Rustup"},
+            @{Id="Google.ChromeRemoteDesktop"; Name="Chrome Remote Desktop (opsional)"}
+          )
+
+          foreach ($tool in $tools) {
+            Write-Host "   Installing $($tool.Name)..." -ForegroundColor Yellow
+            winget install --id $tool.Id `
+              --silent --accept-source-agreements --accept-package-agreements `
+              --override "/quiet /norestart" 2>&1 | Out-Null
+            Write-Host "   [OK] $($tool.Name)" -ForegroundColor Green
+          }
+
+          # Refresh PATH
+          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
+                      [System.Environment]::GetEnvironmentVariable("PATH","User")
+
+          # Verifikasi
+          Write-Host "`n>>> Verifikasi instalasi:" -ForegroundColor Cyan
+          git   --version 2>$null | ForEach-Object { Write-Host "  Git    : $_" }
+          node  --version 2>$null | ForEach-Object { Write-Host "  Node   : $_" }
+          python --version 2>$null | ForEach-Object { Write-Host "  Python : $_" }
+
+          # pip tools tambahan
+          Write-Host ">>> Install pip packages umum..." -ForegroundColor Cyan
+          python -m pip install --upgrade pip requests httpx aiohttp 2>$null | Out-Null
+
+          # npm global tools
+          Write-Host ">>> Install npm global tools..." -ForegroundColor Cyan
+          npm install -g pnpm yarn bun 2>$null | Out-Null
+
+          Write-Host "[OK] Semua dev tools terinstall." -ForegroundColor Green
+
+      # ─────────────────────────────────────────────
+      # 4. TAILSCALE — Install & Connect
+      # ─────────────────────────────────────────────
+      - name: 🔒 Install & Koneksi Tailscale
+        shell: powershell
+        run: |
+          Write-Host ">>> Download Tailscale installer..." -ForegroundColor Cyan
+          $installer = "$env:TEMP\tailscale-setup.exe"
+          $maxRetry  = 3
+
+          for ($i = 1; $i -le $maxRetry; $i++) {
+            try {
+              Invoke-WebRequest `
+                -Uri     'https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe' `
+                -OutFile $installer `
+                -UseBasicParsing `
+                -TimeoutSec 60
+              break
+            } catch {
+              Write-Host "   Percobaan $i gagal: $_" -ForegroundColor Yellow
+              if ($i -eq $maxRetry) { throw "Gagal download Tailscale setelah $maxRetry percobaan." }
+              Start-Sleep -Seconds 5
+            }
+          }
+
+          Write-Host ">>> Install Tailscale (silent)..." -ForegroundColor Cyan
+          Start-Process -FilePath $installer -ArgumentList '/quiet' -Wait
+          Start-Sleep -Seconds 5
+
+          $tailscale = "C:\Program Files\Tailscale\tailscale.exe"
+          if (-not (Test-Path $tailscale)) {
+            throw "Tailscale tidak ditemukan di path yang diharapkan!"
+          }
+
+          Write-Host ">>> Autentikasi & join Tailnet..." -ForegroundColor Cyan
+          & $tailscale up `
+            --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" `
+            --hostname="rdp-cloud-compute" `
+            --advertise-tags="tag:rdp" `
+            --unattended `
+            --reset
+
+          Start-Sleep -Seconds 8
+
+          Write-Host ">>> Status Tailscale:" -ForegroundColor Cyan
+          & $tailscale status
+
+          # Ambil IP Tailscale untuk ditampilkan
+          $tsIP = & $tailscale ip -4 2>$null
+          Write-Host "`n  Tailscale IP : $tsIP" -ForegroundColor Magenta
+
+          # Simpan IP ke env agar bisa dipakai step berikutnya
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+
+          Write-Host "[OK] Tailscale tersambung." -ForegroundColor Green
+
+      # ─────────────────────────────────────────────
+      # 5. INFO KONEKSI
+      # ─────────────────────────────────────────────
+      - name: 📋 Info Koneksi RDP
+        shell: powershell
+        run: |
+          $tsIP = $env:TAILSCALE_IP
+          Write-Host ""
+          Write-Host "╔══════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║         ✅  RDP CLOUD COMPUTE SIAP           ║" -ForegroundColor Cyan
+          Write-Host "╠══════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  Username   : Adysetia                       ║" -ForegroundColor White
+          Write-Host "║  Password   : (dari secret RDP_PASSWORD)     ║" -ForegroundColor White
+          Write-Host "║  Host RDP   : rdp-cloud-compute.[tailnet]    ║" -ForegroundColor White
+          Write-Host "║  IP Direct  : $tsIP (via Tailscale)          ║" -ForegroundColor Yellow
+          Write-Host "║  Port       : 3389                           ║" -ForegroundColor White
+          Write-Host "╠══════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  Dev Tools Tersedia:                         ║" -ForegroundColor White
+          Write-Host "║   • Git, Node.js LTS, Python 3.12           ║" -ForegroundColor White
+          Write-Host "║   • VS Code, Rust, pnpm, yarn, bun          ║" -ForegroundColor White
+          Write-Host "╠══════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  Cara konek (Windows):                       ║" -ForegroundColor White
+          Write-Host "║   mstsc /v:$tsIP                             ║" -ForegroundColor Green
+          Write-Host "║  Cara konek (Mac/Linux):                     ║" -ForegroundColor White
+          Write-Host "║   Pakai Microsoft Remote Desktop / FreeRDP   ║" -ForegroundColor Green
+          Write-Host "╠══════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║  ⏱  Sesi aktif max 6 jam (360 menit)        ║" -ForegroundColor Yellow
+          Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Cyan
+          Write-Host ""
+
+      # ─────────────────────────────────────────────
+      # 6. KEEP-ALIVE — Dengan heartbeat status
+      # ─────────────────────────────────────────────
+      - name: ♾️ Keep-Alive (max 6 jam)
+        shell: powershell
+        run: |
+          $tailscale  = "C:\Program Files\Tailscale\tailscale.exe"
+          $startTime  = Get-Date
+          $maxMinutes = 350   # Buffer 10 menit sebelum timeout 360
+          $beatEvery  = 300   # Heartbeat tiap 5 menit
+
+          Write-Host "Sesi dimulai: $startTime" -ForegroundColor Green
+          Write-Host "Akan berjalan hingga ~$maxMinutes menit." -ForegroundColor Yellow
+
+          while ($true) {
+            $elapsed = [int]((Get-Date) - $startTime).TotalMinutes
+
+            if ($elapsed -ge $maxMinutes) {
+              Write-Host "`n[INFO] Mendekati batas waktu ($elapsed menit). Sesi berakhir." -ForegroundColor Red
+              break
+            }
+
+            $remaining = $maxMinutes - $elapsed
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] Aktif — ${elapsed}m berjalan, ~${remaining}m tersisa" -ForegroundColor DarkGray
+
+            # Pastikan Tailscale masih terhubung
+            $tsStatus = & $tailscale status 2>&1 | Select-Object -First 1
+            if ($tsStatus -notmatch "Logged in") {
+              Write-Host "[WARN] Tailscale mungkin terputus. Re-connect..." -ForegroundColor Yellow
+              & $tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --unattended 2>$null
+            }
+
+            Start-Sleep -Seconds $beatEvery
+          }
