@@ -1,0 +1,187 @@
+name: 🖥️ RDP Dev - MAX SPECS
+
+on:
+  workflow_dispatch:
+    inputs:
+      rdp_password:
+        description: 'Password RDP (min 12 karakter, huruf+angka+simbol)'
+        required: true
+        type: string
+      durasi:
+        description: 'Durasi sesi (jam)'
+        required: true
+        default: '6'
+        type: choice
+        options:
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+          - '6'
+
+# WAJIB: Repo harus PUBLIC untuk dapat 4 vCPU + 16GB RAM gratis
+jobs:
+  rdp-dev:
+    runs-on: ubuntu-latest   # Public repo → otomatis 4 vCPU, 16GB RAM
+    timeout-minutes: 360
+
+    steps:
+
+      # ─────────────────────────────────────────
+      # 1. BEBASKAN DISK SPACE (14GB → ~45GB)
+      # ─────────────────────────────────────────
+      - name: 🗑️ Maximize Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      # ─────────────────────────────────────────
+      # 2. TAMPILKAN SPESIFIKASI RUNNER
+      # ─────────────────────────────────────────
+      - name: 📊 Cek Spesifikasi
+        run: |
+          echo "════════════════════════════════════"
+          echo "         SPESIFIKASI RUNNER"
+          echo "════════════════════════════════════"
+          echo "🖥️  CPU:"
+          nproc
+          lscpu | grep -E "Model name|CPU\(s\)|Thread"
+          echo ""
+          echo "💾 RAM:"
+          free -h
+          echo ""
+          echo "💿 DISK:"
+          df -h /
+          echo "════════════════════════════════════"
+
+      # ─────────────────────────────────────────
+      # 3. INSTALL XFCE DESKTOP
+      # ─────────────────────────────────────────
+      - name: 🖥️ Install XFCE Desktop
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            xfce4 xfce4-goodies xorg dbus-x11 \
+            --no-install-recommends
+
+      # ─────────────────────────────────────────
+      # 4. INSTALL & KONFIGURASI XRDP
+      # ─────────────────────────────────────────
+      - name: 🔧 Install XRDP
+        run: |
+          sudo apt-get install -y xrdp
+          sudo adduser xrdp ssl-cert
+
+          echo "startxfce4" | sudo tee /etc/xrdp/startwm.sh
+          sudo chmod +x /etc/xrdp/startwm.sh
+
+          # Optimasi performa RDP
+          sudo sed -i 's/max_bpp=32/max_bpp=24/' /etc/xrdp/xrdp.ini
+          sudo sed -i 's/crypt_level=high/crypt_level=low/' /etc/xrdp/xrdp.ini
+          sudo sed -i 's/#tcp_send_buffer_bytes=32768/tcp_send_buffer_bytes=65536/' /etc/xrdp/xrdp.ini
+
+          sudo systemctl restart xrdp
+          sudo systemctl enable xrdp
+
+      # ─────────────────────────────────────────
+      # 5. BUAT USER
+      # ─────────────────────────────────────────
+      - name: 👤 Setup User
+        run: |
+          sudo useradd -m -s /bin/bash devuser
+          echo "devuser:${{ github.event.inputs.rdp_password }}" | sudo chpasswd
+          sudo usermod -aG sudo devuser
+          echo "devuser ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/devuser
+
+          echo "startxfce4" | sudo tee /home/devuser/.xsession
+          sudo chown devuser:devuser /home/devuser/.xsession
+
+      # ─────────────────────────────────────────
+      # 6. INSTALL DEV TOOLS + VS CODE
+      # ─────────────────────────────────────────
+      - name: 🛠️ Install Dev Tools & VS Code
+        run: |
+          sudo apt-get install -y \
+            git curl wget nano htop neofetch \
+            python3 python3-pip python3-venv \
+            nodejs npm \
+            build-essential \
+            --no-install-recommends
+
+          # VS Code
+          wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
+            | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+          echo "deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main" \
+            | sudo tee /etc/apt/sources.list.d/vscode.list
+          sudo apt-get update -qq
+          sudo apt-get install -y code
+
+          # Desktop shortcut VS Code
+          sudo -u devuser mkdir -p /home/devuser/Desktop
+          sudo bash -c 'cat > /home/devuser/Desktop/VSCode.desktop << EOF
+[Desktop Entry]
+Name=Visual Studio Code
+Exec=/usr/bin/code --no-sandbox --user-data-dir=/home/devuser/.vscode
+Icon=vscode
+Type=Application
+Categories=Development;
+EOF'
+          sudo chmod +x /home/devuser/Desktop/VSCode.desktop
+          sudo chown devuser:devuser /home/devuser/Desktop/VSCode.desktop
+
+          echo "✅ Semua tools terinstall"
+
+      # ─────────────────────────────────────────
+      # 7. TAMPILKAN INFO KONEKSI
+      # ─────────────────────────────────────────
+      - name: 🌐 Info Koneksi RDP
+        run: |
+          PUBLIC_IP=$(curl -s ifconfig.me)
+          echo "PUBLIC_IP=$PUBLIC_IP" >> $GITHUB_ENV
+
+          echo ""
+          echo "╔══════════════════════════════════════════╗"
+          echo "║          🖥️  INFO KONEKSI RDP              ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  IP      : $PUBLIC_IP"
+          echo "║  Port    : 3389"
+          echo "║  User    : devuser"
+          echo "║  Pass    : [yg Anda masukkan]"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  CPU     : 4 vCPU (Intel Xeon)           ║"
+          echo "║  RAM     : 16 GB                         ║"
+          echo "║  DISK    : ~45 GB (setelah cleanup)      ║"
+          echo "╠══════════════════════════════════════════╣"
+          echo "║  Windows : mstsc → $PUBLIC_IP:3389  ║"
+          echo "╚══════════════════════════════════════════╝"
+
+          # Verifikasi xrdp aktif
+          sudo netstat -tlnp | grep 3389 && echo "✅ XRDP aktif di port 3389" || echo "❌ XRDP gagal"
+
+      # ─────────────────────────────────────────
+      # 8. KEEP ALIVE
+      # ─────────────────────────────────────────
+      - name: ⏳ Sesi Aktif
+        run: |
+          JAM=${{ github.event.inputs.durasi }}
+          DETIK=$((JAM * 3600))
+          AKHIR=$((SECONDS + DETIK))
+
+          echo "🚀 Sesi RDP aktif selama $JAM jam"
+          echo "🌐 IP: $PUBLIC_IP:3389  |  👤 devuser"
+          echo "──────────────────────────────────────────"
+
+          while [ $SECONDS -lt $AKHIR ]; do
+            SISA=$((AKHIR - SECONDS))
+            H=$((SISA / 3600))
+            M=$(((SISA % 3600) / 60))
+            echo "⏰ Sisa: ${H}j ${M}m  |  🌐 $PUBLIC_IP:3389"
+            sleep 300
+          done
+
+          echo "⏹️  Sesi selesai."
